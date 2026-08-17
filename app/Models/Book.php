@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\BookStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Book extends Model
 {
@@ -25,17 +26,28 @@ class Book extends Model
 
     // Attribute Casting
     protected $casts = [
-        'draw_date'  => 'date',
+        'draw_date' => 'date',
         'assigned_at' => 'datetime',
-        'expiry_at'  => 'datetime',
-        'sold_at'    => 'datetime',
-        'unsold_at'  => 'datetime',
-        'status'     => BookStatus::class,
+        'expiry_at' => 'datetime',
+        'sold_at' => 'datetime',
+        'unsold_at' => 'datetime',
+        'status' => BookStatus::class,
     ];
 
     // Book belongs to a Game
     public function game(): BelongsTo
     {
         return $this->belongsTo(Game::class);
+    }
+
+    // Book has many Tickets
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class);
+    }
+
+    public function statusHistories()
+    {
+        return $this->hasMany(BookStatusHistory::class);
     }
 }

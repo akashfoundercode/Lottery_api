@@ -1,21 +1,34 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V1\Admin\AgentController;
 use App\Http\Controllers\Api\V1\Admin\AuthController;
-use App\Http\Controllers\Api\V1\Admin\GameController;
+use App\Http\Controllers\Api\V1\Admin\BookAssignmentController;
 use App\Http\Controllers\Api\V1\Admin\BookController;
-  
+use App\Http\Controllers\Api\V1\Admin\GameController;
+use App\Http\Controllers\Api\V1\Admin\TickerController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+
 Route::prefix('v1/admin')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 
     Route::middleware('auth:admin')->group(function () {
-    Route::get('/profile', function (\Illuminate\Http\Request $request) {
-        return response()->json([
-            'success' => true,
-            'admin' => $request->user(),
-        ]);
+        Route::get('/profile', function (Request $request) {
+            return response()->json([
+                'success' => true,
+                'admin' => $request->user(),
+            ]);
+        });
+
+        // Tickers
+        Route::post('/tickers', [TickerController::class, 'store']);
+        Route::get('/tickers', [TickerController::class, 'index']);
+        Route::get('/tickers/{ticker}', [TickerController::class, 'show']);
+        Route::put('/tickers/{ticker}', [TickerController::class, 'update']);
+        Route::delete('/tickers/{ticker}', [TickerController::class, 'destroy']);
+        Route::patch('/tickers/{ticker}/toggle-status', [TickerController::class, 'toggleStatus']);
     });
-    });
+    Route::post('/books/import', [BookController::class, 'import'])->middleware('auth:admin');
     Route::post('/logout', [AuthController::class, 'logout']);
     // Change Password
     Route::post('/change-password', [AuthController::class, 'changePassword']);
@@ -30,7 +43,19 @@ Route::prefix('v1/admin')->group(function () {
     Route::post('/games/{game}/generate-books', [BookController::class, 'generate']);
     // Book List
     Route::get('/books', [BookController::class, 'index']);
-    
-});
+    // Book Details
+    Route::get('/books/{book}', [BookController::class, 'show']);
+    // Create Agent
+    Route::post('/agents', [AgentController::class, 'store']);
+    // Agent List
+    Route::get('/agents', [AgentController::class, 'index']);
+    // Agent Details
+    Route::get('/agents/{agent}', [AgentController::class, 'show']);
+    // Update Agent
+    Route::put('/agents/{agent}', [AgentController::class, 'update']);
+    // Toggle Agent Status
+    Route::patch('/agents/{agent}/toggle-status', [AgentController::class, 'toggleStatus']);
+    // Book Assignment
+    Route::post('/book-assignments', [BookAssignmentController::class, 'store']);
 
-   
+});
