@@ -11,9 +11,9 @@ use ZipArchive;
 class TicketSpreadsheetImporter
 {
     /**
-     * @return array<int, string>
+     * @return array<int, array{book_number: string|null, tickets: array<int, string>}>
      */
-    public function ticketNumbersFromFile(UploadedFile $file): array
+    public function bookRowsFromFile(UploadedFile $file): array
     {
         $extension = strtolower($file->getClientOriginalExtension());
 
@@ -28,7 +28,23 @@ class TicketSpreadsheetImporter
             ]),
         };
 
-        return $this->validateAndExtractTicketNumbers($rows);
+        return $this->extractBookRows($rows);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function ticketNumbersFromFile(UploadedFile $file): array
+    {
+        $bookRows = $this->bookRowsFromFile($file);
+
+        $ticketNumbers = [];
+
+        foreach ($bookRows as $bookRow) {
+            $ticketNumbers = [...$ticketNumbers, ...$bookRow['tickets']];
+        }
+
+        return $this->validateAndExtractTicketNumbers($ticketNumbers);
     }
 
     /**
@@ -47,7 +63,13 @@ class TicketSpreadsheetImporter
         $rows = [];
 
         while (($row = fgetcsv($handle)) !== false) {
-            $rows[] = array_map(static fn ($value) => (string) $value, $row);
+            $normalizedRow = array_map(static fn ($value) => (string) $value, $row);
+
+            if (collect($normalizedRow)->every(fn (string $value) => trim($value) === '')) {
+                continue;
+            }
+
+            $rows[] = $normalizedRow;
         }
 
         fclose($handle);
@@ -237,9 +259,9 @@ class TicketSpreadsheetImporter
 
     /**
      * @param  array<int, array<int, string>>  $rows
-     * @return array<int, string>
+     * @return array<int, array{book_number: string|null, tickets: array<int, string>}>
      */
-    private function validateAndExtractTicketNumbers(array $rows): array
+    private function extractBookRows(array $rows): array
     {
         $rows = array_values(array_filter(
             $rows,
@@ -253,42 +275,111 @@ class TicketSpreadsheetImporter
         }
 
         $headers = array_map(
-            static fn (string $header) => trim(str_replace("\xEF\xBB\xBF", '', $header)),
+            static function (string $header): string {
+                $header = trim(str_replace("\xEF\xBB\xBF", '', $header));
+
+                return strtolower(preg_replace('/[^a-z0-9]+/i', '', $header) ?? $header);
+            },
             $rows[0]
         );
 
-        $ticketColumn = array_search('ticket_number', $headers, true);
+        $bookColumn = null;
+        $ticketIndexes = [];
 
-        if ($ticketColumn === false) {
-            throw ValidationException::withMessages([
-                'file' => ['Ticket spreadsheet must contain a ticket_number header.'],
-            ]);
+        foreach ($headers as $index => $header) {
+            $matchesBookHeader = in_array($header, [
+                'book',
+                'booknumber',
+                'bookno',
+                'bookid',
+            ], true)
+                || str_contains($header, 'book')
+                || str_contains($header, 'bookid')
+                || str_contains($header, 'bookno');
+
+            if ($matchesBookHeader) {
+                $bookColumn = $index;
+            }
+
+            if (str_contains($header, 'ticket') || str_contains($header, 'coupon')) {
+                $ticketIndexes[] = $index;
+            }
         }
 
-        $ticketNumbers = [];
-        $errors = [];
+        $ticketIndexes = array_values(array_unique($ticketIndexes));
+
+        $bookRows = [];
 
         foreach (array_slice($rows, 1) as $index => $row) {
             $spreadsheetRow = $index + 2;
-            $ticketNumber = (string) ($row[$ticketColumn] ?? '');
+            $bookNumber = $bookColumn !== null ? trim((string) ($row[$bookColumn] ?? '')) : null;
 
-            if (trim($ticketNumber) === '') {
-                $errors["tickets.row_{$spreadsheetRow}"][] = 'Ticket number is required.';
-
+            if ($bookColumn !== null && trim((string) ($row[$bookColumn] ?? '')) === '' && collect($row)->every(fn (string $value) => trim($value) === '')) {
                 continue;
             }
 
-            if ($ticketNumber !== trim($ticketNumber)) {
-                $errors["tickets.row_{$spreadsheetRow}"][] = 'Ticket number may not contain leading or trailing spaces.';
-
-                continue;
+            if ($bookColumn === null || trim((string) ($row[$bookColumn] ?? '')) === '') {
+                throw ValidationException::withMessages([
+                    'file' => ['Book row '.$spreadsheetRow.' is missing a book number.'],
+                ]);
             }
 
-            $ticketNumbers[] = $ticketNumber;
+            if ($ticketIndexes === []) {
+                throw ValidationException::withMessages([
+                    'file' => ['Book row '.$spreadsheetRow.' does not contain any ticket number columns.'],
+                ]);
+            }
+
+            $ticketCells = [];
+
+            foreach ($ticketIndexes as $columnIndex) {
+                $value = trim((string) ($row[$columnIndex] ?? ''));
+
+                if ($value !== '') {
+                    $ticketCells[] = $value;
+                }
+            }
+
+            if ($ticketCells === []) {
+                throw ValidationException::withMessages([
+                    'file' => ['Book row '.$spreadsheetRow.' has no ticket numbers.'],
+                ]);
+            }
+
+            $bookRows[] = [
+                'book_number' => $bookNumber,
+                'tickets' => $ticketCells,
+            ];
         }
 
-        if ($ticketNumbers === [] && $errors === []) {
-            $errors['file'][] = 'Ticket spreadsheet does not contain any ticket rows.';
+        if ($bookRows === []) {
+            throw ValidationException::withMessages([
+                'file' => ['Ticket spreadsheet does not contain any valid book rows.'],
+            ]);
+        }
+
+        return $bookRows;
+    }
+
+    /**
+     * @param  array<int, string>  $ticketNumbers
+     * @return array<int, string>
+     */
+    private function validateAndExtractTicketNumbers(array $ticketNumbers): array
+    {
+        $ticketNumbers = array_values(array_filter(
+            $ticketNumbers,
+            static fn (string $ticketNumber) => trim($ticketNumber) !== ''
+        ));
+
+        $errors = [];
+
+        foreach ($ticketNumbers as $index => $ticketNumber) {
+            if ($ticketNumber !== trim($ticketNumber)) {
+                $errors['ticket_number'][] = 'Ticket number may not contain leading or trailing spaces.';
+
+                break;
+            }
         }
 
         $duplicates = collect($ticketNumbers)

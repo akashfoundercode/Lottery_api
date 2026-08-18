@@ -28,73 +28,110 @@ class BookController extends Controller
         ImportBookTicketsRequest $request,
         TicketSpreadsheetImporter $importer
     ) {
-        $game = Game::findOrFail($request->game_id);
-        $ticketNumbers = $importer->ticketNumbersFromFile($request->file('file'));
-
-        if (count($ticketNumbers) !== (int) $game->book_size) {
-            throw ValidationException::withMessages([
-                'file' => [
-                    'Imported ticket count must match the game book size of '.$game->book_size.'.',
-                ],
-            ]);
-        }
-
-        $existingTicketNumbers = Ticket::whereIn('ticket_number', $ticketNumbers)
-            ->pluck('ticket_number')
-            ->all();
-
-        if ($existingTicketNumbers !== []) {
-            throw ValidationException::withMessages([
-                'ticket_number' => [
-                    'Ticket numbers already exist: '.implode(', ', $existingTicketNumbers).'.',
-                ],
-            ]);
-        }
-
         try {
-            $book = DB::transaction(function () use ($game, $request, $ticketNumbers) {
-                $book = Book::create([
-                    'game_id' => $game->id,
-                    'book_id' => $this->nextBookId(),
-                    'total_tickets' => count($ticketNumbers),
-                    'draw_date' => $request->input('draw_date', $game->draw_date),
-                    'draw_time' => $request->input('draw_time', $game->draw_time),
-                    'status' => 'available',
+            $game = Game::findOrFail($request->game_id);
+            $bookRows = $importer->bookRowsFromFile($request->file('file'));
+            $allTicketNumbers = [];
+
+            foreach ($bookRows as $index => $bookRow) {
+                $ticketNumbers = $bookRow['tickets'];
+
+                if (trim((string) ($bookRow['book_number'] ?? '')) === '') {
+                    throw ValidationException::withMessages([
+                        'file' => ['Book row '.($index + 2).' is missing a book number.'],
+                    ]);
+                }
+
+                if ($ticketNumbers === []) {
+                    throw ValidationException::withMessages([
+                        'file' => ['Book row '.($index + 2).' has no ticket numbers.'],
+                    ]);
+                }
+
+                $allTicketNumbers = [...$allTicketNumbers, ...$ticketNumbers];
+            }
+
+            $existingTicketNumbers = Ticket::whereIn('ticket_number', $allTicketNumbers)
+                ->pluck('ticket_number')
+                ->all();
+
+            if ($existingTicketNumbers !== []) {
+                throw ValidationException::withMessages([
+                    'ticket_number' => [
+                        'Ticket numbers already exist: '.implode(', ', $existingTicketNumbers).'.',
+                    ],
                 ]);
+            }
 
-                $now = now();
+            $createdBooks = DB::transaction(function () use ($game, $request, $bookRows) {
+                $books = [];
 
-                $tickets = collect($ticketNumbers)
-                    ->map(fn (string $ticketNumber) => [
-                        'book_id' => $book->id,
+                foreach ($bookRows as $bookRow) {
+                    $book = Book::create([
                         'game_id' => $game->id,
-                        'ticket_number' => $ticketNumber,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ])
-                    ->all();
+                        'book_id' => $this->nextBookId(),
+                        'total_tickets' => count($bookRow['tickets']),
+                        'draw_date' => $request->input('draw_date', $game->draw_date),
+                        'draw_time' => $request->input('draw_time', $game->draw_time),
+                        'status' => 'available',
+                    ]);
 
-                Ticket::insert($tickets);
+                    $now = now();
 
-                return $book;
+                    $tickets = collect($bookRow['tickets'])
+                        ->map(fn (string $ticketNumber) => [
+                            'book_id' => $book->id,
+                            'game_id' => $game->id,
+                            'ticket_number' => $ticketNumber,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ])
+                        ->all();
+
+                    Ticket::insert($tickets);
+
+                    $book->load('game', 'tickets');
+                    $books[] = $book;
+                }
+
+                return $books;
             });
-        } catch (QueryException) {
-            throw ValidationException::withMessages([
-                'ticket_number' => ['One or more ticket numbers already exist.'],
-            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Books and tickets imported successfully.',
+                'imported_book_count' => count($createdBooks),
+                'imported_ticket_count' => count($allTicketNumbers),
+                'data' => $createdBooks,
+            ], 201);
+        } catch (ValidationException $exception) {
+            $errors = $exception->errors();
+            $firstMessage = collect($errors)
+                ->flatten()
+                ->first();
+
+            return response()->json([
+                'success' => false,
+                'message' => $firstMessage ?? 'Spreadsheet validation failed.',
+                'errors' => $errors,
+            ], 422);
+        } catch (QueryException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'errors' => [
+                    'ticket_number' => [$exception->getMessage()],
+                ],
+            ], 422);
+        } catch (\Throwable $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'errors' => [
+                    'file' => [$exception->getMessage()],
+                ],
+            ], 500);
         }
-
-        $book->load([
-            'game',
-            'tickets',
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Book and tickets imported successfully.',
-            'imported_ticket_count' => count($ticketNumbers),
-            'data' => $book,
-        ], 201);
     }
 
     // Book List
@@ -102,7 +139,7 @@ class BookController extends Controller
     {
         $books = Book::with('game')
             ->latest()
-            ->paginate(10);
+            ->get();
 
         return response()->json([
             'success' => true,

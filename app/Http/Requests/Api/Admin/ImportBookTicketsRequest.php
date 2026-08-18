@@ -34,7 +34,7 @@ class ImportBookTicketsRequest extends FormRequest
                 'required',
                 'file',
                 'mimes:csv,txt,xlsx,xls',
-                'max:5120',
+                'max:40960',
             ],
         ];
     }

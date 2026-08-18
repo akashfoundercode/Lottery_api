@@ -53,29 +53,29 @@ class BookAssignmentController extends Controller
         }
 
         $assignments = [];
+        $assignedAt = now();
+        $expiryAt = $request->expiry_at ? $request->expiry_at : $assignedAt->copy()->addHour();
 
         DB::transaction(function () use (
             $books,
             $agent,
-            $request,
+            $assignedAt,
+            $expiryAt,
             &$assignments
         ) {
             foreach ($books as $book) {
-
-                // Create assignment history
                 $assignment = BookAssignment::create([
                     'book_id' => $book->id,
                     'agent_id' => $agent->id,
-                    'assigned_at' => now(),
-                    'expiry_at' => $request->expiry_at,
+                    'assigned_at' => $assignedAt,
+                    'expiry_at' => $expiryAt,
                 ]);
 
-                // Update Book
                 $book->update([
                     'agent_id' => $agent->id,
                     'status' => BookStatus::ASSIGNED,
-                    'assigned_at' => now(),
-                    'expiry_at' => $request->expiry_at,
+                    'assigned_at' => $assignedAt,
+                    'expiry_at' => $expiryAt,
                 ]);
 
                 $assignments[] = $assignment;
@@ -92,7 +92,50 @@ class BookAssignmentController extends Controller
                     'agent_name' => $agent->agent_name,
                 ],
                 'total_books_assigned' => count($assignments),
+                'expires_at' => $expiryAt,
                 'assignments' => $assignments,
+            ],
+        ], 200);
+    }
+
+    public function history()
+    {
+        $assignments = BookAssignment::with(['book', 'agent'])
+            ->latest('assigned_at')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Assignment history fetched successfully.',
+            'data' => $assignments,
+        ], 200);
+    }
+
+    public function expireExpiredAssignments()
+    {
+        $expiredBooks = Book::where('status', BookStatus::ASSIGNED)
+            ->whereNotNull('expiry_at')
+            ->where('expiry_at', '<=', now())
+            ->get();
+
+        $expiredCount = 0;
+
+        foreach ($expiredBooks as $book) {
+            $book->update([
+                'status' => BookStatus::UNSOLD_BY_ADMIN,
+                'agent_id' => null,
+                'unsold_at' => now(),
+            ]);
+
+            $expiredCount++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Expired assigned books processed successfully.',
+            'data' => [
+                'expired_count' => $expiredCount,
+                'book_ids' => $expiredBooks->pluck('id')->values(),
             ],
         ], 200);
     }

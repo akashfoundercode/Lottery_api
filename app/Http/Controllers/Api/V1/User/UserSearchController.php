@@ -8,10 +8,12 @@ use App\Http\Requests\Api\User\MyTicketsRequest;
 use App\Http\Requests\Api\User\UserSearchRequest;
 use App\Models\Agent;
 use App\Models\Game;
+use App\Models\Result;
 use App\Models\Ticker;
 use App\Models\Ticket;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 class UserSearchController extends Controller
 {
@@ -43,7 +45,7 @@ class UserSearchController extends Controller
             ->orderByDesc('draw_date')
             ->limit(5)
             ->get()
-            ->map(fn (Game $game) => $this->serializeResult($game));
+            ->map(fn (Game $game) => $this->serializeGameResult($game));
 
         return response()->json([
             'success' => true,
@@ -223,25 +225,37 @@ class UserSearchController extends Controller
 
     public function results(): JsonResponse
     {
-        $results = Game::query()
-            ->where('status', GameStatus::COMPLETED->value)
-            ->orderByDesc('draw_date')
+        $results = Result::query()
+            ->with('game')
+            ->where('status', 'active')
+            ->orderByDesc('result_date')
             ->paginate(10);
+
+        $items = $results->getCollection()->map(fn (Result $result) => $this->serializeResult($result));
+        $results->setCollection($items);
 
         return response()->json([
             'success' => true,
             'message' => 'Results fetched successfully.',
-            'data' => $results,
+            'data' => [
+                'results' => $results->items(),
+                'pagination' => [
+                    'current_page' => $results->currentPage(),
+                    'per_page' => $results->perPage(),
+                    'total' => $results->total(),
+                    'last_page' => $results->lastPage(),
+                ],
+            ],
         ], 200);
     }
 
     public function resultsHistory(): JsonResponse
     {
-        $results = Game::query()
-            ->where('status', GameStatus::COMPLETED->value)
-            ->orderByDesc('draw_date')
+        $results = Result::query()
+            ->with('game')
+            ->orderByDesc('result_date')
             ->get()
-            ->map(fn (Game $game) => $this->serializeResult($game));
+            ->map(fn (Result $result) => $this->serializeResult($result));
 
         return response()->json([
             'success' => true,
@@ -252,13 +266,13 @@ class UserSearchController extends Controller
         ], 200);
     }
 
-    public function resultDetail(Game $result): JsonResponse
+    public function resultDetail(Result $result): JsonResponse
     {
         return response()->json([
             'success' => true,
             'message' => 'Result details fetched successfully.',
             'data' => [
-                'result' => $this->serializeResult($result),
+                'result' => $this->serializeResult($result->load('game')),
             ],
         ], 200);
     }
@@ -332,18 +346,35 @@ class UserSearchController extends Controller
         ];
     }
 
-    private function serializeResult(Game $game): array
+    private function serializeResult(Game|Result $result): array
     {
+        if ($result instanceof Game) {
+            return [
+                'id' => $result->id,
+                'game_id' => $result->game_id,
+                'game_name' => $result->game_name,
+                'draw_date' => $this->formatDate($result->draw_date, 'Y-m-d'),
+                'draw_time' => $this->formatDate($result->draw_time, 'H:i:s'),
+                'status' => $result->status,
+                'youtube_live_url' => $result->youtube_live_url,
+                'facebook_live_url' => $result->facebook_live_url,
+            ];
+        }
+
         return [
-            'id' => $game->id,
-            'game_id' => $game->game_id,
-            'game_name' => $game->game_name,
-            'draw_date' => $this->formatDate($game->draw_date, 'Y-m-d'),
-            'draw_time' => $this->formatDate($game->draw_time, 'H:i:s'),
-            'status' => $game->status,
-            'youtube_live_url' => $game->youtube_live_url,
-            'facebook_live_url' => $game->facebook_live_url,
+            'id' => $result->id,
+            'game_id' => $result->game?->game_id,
+            'game_name' => $result->game?->game_name,
+            'title' => $result->title,
+            'result_date' => $this->formatDate($result->result_date, 'Y-m-d'),
+            'status' => $result->status,
+            'result_image' => $result->result_image ? Storage::disk('public')->url($result->result_image) : null,
         ];
+    }
+
+    private function serializeGameResult(Game $game): array
+    {
+        return $this->serializeResult($game);
     }
 
     private function formatDate($value, string $format): ?string
