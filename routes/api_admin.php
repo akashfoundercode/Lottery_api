@@ -34,6 +34,7 @@ Route::prefix('v1/admin')->group(function () {
         Route::get('/results/{result}', [ResultController::class, 'show']);
         Route::put('/results/{result}', [ResultController::class, 'update']);
         Route::delete('/results/{result}', [ResultController::class, 'destroy']);
+        Route::patch('/results/{result}/restore', [ResultController::class, 'restore']);
         Route::patch('/results/{result}/toggle-status', [ResultController::class, 'toggleStatus']);
     });
     Route::post('/books/import', [BookController::class, 'import'])->middleware('auth:admin');
@@ -45,7 +46,8 @@ Route::prefix('v1/admin')->group(function () {
     Route::get('/games', [GameController::class, 'index']);
     // Game Details
     Route::get('/games/{game}', [GameController::class, 'show']);
-    // Update Game
+    // Update Game (POST for multipart/form-data with image support)
+    Route::post('/games/{game}', [GameController::class, 'update']);
     Route::put('/games/{game}', [GameController::class, 'update']);
     // Generate Books & Tickets
     Route::post('/games/{game}/generate-books', [BookController::class, 'generate']);
@@ -53,6 +55,8 @@ Route::prefix('v1/admin')->group(function () {
     Route::get('/books', [BookController::class, 'index']);
     // Book Details
     Route::get('/books/{book}', [BookController::class, 'show']);
+    // Admin: Update Book Status (sold/unsold correction)
+    Route::patch('/books/update-status', [BookController::class, 'updateStatus']);
     // Create Agent
     Route::post('/agents', [AgentController::class, 'store']);
     // Agent List

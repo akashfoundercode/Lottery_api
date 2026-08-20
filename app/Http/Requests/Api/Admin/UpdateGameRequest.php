@@ -14,6 +14,14 @@ class UpdateGameRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        // Support POST method spoofing for multipart/form-data
+        if ($this->input('_method')) {
+            $this->offsetUnset('_method');
+        }
+    }
+
     // Validation Rules
     public function rules(): array
     {
@@ -38,8 +46,9 @@ class UpdateGameRequest extends FormRequest
             'game_image' => [
                 'sometimes',
                 'nullable',
-                'string',
-                'max:255',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
             ],
 
             'ticket_price' => [
@@ -96,6 +105,13 @@ class UpdateGameRequest extends FormRequest
                     array_column(GameStatus::cases(), 'value')
                 ),
             ],
+
+            'banners' => ['sometimes', 'nullable', 'array'],
+            'banners.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+
+            // IDs of banners to delete
+            'delete_banner_ids'   => ['sometimes', 'nullable', 'array'],
+            'delete_banner_ids.*' => ['integer'],
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Http\Controllers\Concerns\HasOffsetLimit;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\StoreAgentRequest;
 use App\Http\Requests\Api\Admin\UpdateAgentRequest;
@@ -9,6 +10,8 @@ use App\Models\Agent;
 
 class AgentController extends Controller
 {
+    use HasOffsetLimit;
+
     // Create Agent
     public function store(StoreAgentRequest $request)
     {
@@ -22,9 +25,9 @@ class AgentController extends Controller
     }
 
     // Agent List
-    public function index()
+    public function index(\Illuminate\Http\Request $request)
     {
-        $agents = Agent::latest()->paginate(10);
+        $agents = $this->paginateWithOffset(Agent::latest(), $request);
 
         return response()->json([
             'success' => true,

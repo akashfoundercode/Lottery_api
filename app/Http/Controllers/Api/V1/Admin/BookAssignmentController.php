@@ -3,15 +3,19 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Enums\BookStatus;
+use App\Http\Controllers\Concerns\HasOffsetLimit;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\AssignBooksRequest;
 use App\Models\Agent;
 use App\Models\Book;
 use App\Models\BookAssignment;
+use App\Services\AgentNotificationService;
 use Illuminate\Support\Facades\DB;
 
 class BookAssignmentController extends Controller
 {
+    use HasOffsetLimit;
+
     // Assign multiple books to an agent
     public function store(AssignBooksRequest $request)
     {
@@ -71,6 +75,7 @@ class BookAssignmentController extends Controller
                     'expiry_at' => $expiryAt,
                 ]);
 
+                $book->load('game');
                 $book->update([
                     'agent_id' => $agent->id,
                     'status' => BookStatus::ASSIGNED,
@@ -80,6 +85,14 @@ class BookAssignmentController extends Controller
 
                 $assignments[] = $assignment;
             }
+
+            AgentNotificationService::send(
+                $agent->id,
+                'book_assigned',
+                'Books Assigned',
+                count($assignments) . ' book(s) assigned to you. Expiry: ' . $expiryAt->format('d M Y h:i A'),
+                ['book_ids' => collect($assignments)->pluck('book_id')->toArray(), 'expiry_at' => $expiryAt]
+            );
         });
 
         return response()->json([
@@ -98,16 +111,18 @@ class BookAssignmentController extends Controller
         ], 200);
     }
 
-    public function history()
+    public function history(\Illuminate\Http\Request $request)
     {
-        $assignments = BookAssignment::with(['book', 'agent'])
-            ->latest('assigned_at')
-            ->get();
+        [$assignments, $pagination] = $this->offsetItems(
+            BookAssignment::with(['book.game', 'agent'])->latest('assigned_at'),
+            $request
+        );
 
         return response()->json([
             'success' => true,
             'message' => 'Assignment history fetched successfully.',
             'data' => $assignments,
+            'pagination' => $pagination,
         ], 200);
     }
 

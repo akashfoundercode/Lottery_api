@@ -40,6 +40,12 @@ class Book extends Model
         return $this->belongsTo(Game::class);
     }
 
+    // Book belongs to an Agent
+    public function agent(): BelongsTo
+    {
+        return $this->belongsTo(Agent::class);
+    }
+
     // Book has many Tickets
     public function tickets(): HasMany
     {

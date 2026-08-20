@@ -1,0 +1,96 @@
+====================================================
+  PAGINATION GUIDE - FRONTEND DEVELOPER KE LIYE
+====================================================
+
+SABHI LIST APIs mein pagination kaam karta hai.
+Neeche likha hua follow karo.
+
+----------------------------------------------------
+STEP 1 - Pehli Call (Page Load pe)
+----------------------------------------------------
+
+GET /api/v1/agent/books?limit=10&offset=0
+
+- limit  = ek baar mein kitne records chahiye (default 10)
+- offset = kahan se shuru karna hai (pehli baar 0)
+
+
+----------------------------------------------------
+STEP 2 - Response ka Structure
+----------------------------------------------------
+
+{
+  "success": true,
+  "data": {
+    "data": [ ...10 items... ],
+    "total": 35,
+    "per_page": 10,
+    "current_page": 1,
+    "last_page": 4,
+    "next_page_url": "http://...?limit=10&offset=10",
+    "prev_page_url": null
+  }
+}
+
+- total         = database mein total kitne records hain
+- current_page  = abhi kaunsa page hai
+- last_page     = aakhri page number
+- next_page_url = agla page ka URL (null ho to aur data nahi)
+
+
+----------------------------------------------------
+STEP 3 - "View More" Button Click pe
+----------------------------------------------------
+
+Har baar offset mein 10 add karo aur dobara call karo:
+
+Page 1 → offset=0
+Page 2 → offset=10
+Page 3 → offset=20
+Page 4 → offset=30
+
+IMPORTANT: Naya data purane data mein APPEND karo, REPLACE mat karo.
+Warna purana data gayab ho jaayega.
+
+
+----------------------------------------------------
+STEP 4 - "View More" Button Kab Hide Karna Hai
+----------------------------------------------------
+
+Jab response mein:
+  next_page_url = null
+ya
+  current_page = last_page
+
+Tab "View More" button hide ya disable kar do.
+Matlab ab koi aur data nahi hai.
+
+
+----------------------------------------------------
+YE SABHI APIs mein SAME LOGIC LAGEGA:
+----------------------------------------------------
+
+AGENT APIs:
+  GET /api/v1/agent/books?limit=10&offset=0
+
+ADMIN APIs:
+  GET /api/v1/admin/books?limit=10&offset=0
+  GET /api/v1/admin/agents?limit=10&offset=0
+  GET /api/v1/admin/games?limit=10&offset=0
+  GET /api/v1/admin/book-assignments/history?limit=10&offset=0
+  GET /api/v1/admin/tickers?limit=10&offset=0
+  GET /api/v1/admin/results?limit=10&offset=0
+
+
+----------------------------------------------------
+EXAMPLE - Step by Step
+----------------------------------------------------
+
+Total records = 35, limit = 10
+
+Call 1: offset=0  → records  1-10  aayenge, "View More" dikhao
+Call 2: offset=10 → records 11-20  aayenge, "View More" dikhao
+Call 3: offset=20 → records 21-30  aayenge, "View More" dikhao
+Call 4: offset=30 → records 31-35  aayenge, "View More" HIDE karo
+
+====================================================

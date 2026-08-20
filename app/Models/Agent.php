@@ -16,6 +16,7 @@ class Agent extends Authenticatable
         'mobile_number',
         'whatsapp_number',
         'address',
+        'profile_photo',
         'agent_type',
         'email',
         'password',
@@ -26,9 +27,16 @@ class Agent extends Authenticatable
         'password',
     ];
 
+    protected $appends = ['profile_photo_url'];
+
     protected $casts = [
         'password' => 'hashed',
     ];
+
+    public function getProfilePhotoUrlAttribute(): ?string
+    {
+        return $this->profile_photo ? asset('storage/' . $this->profile_photo) : null;
+    }
 
     // Agent ke assigned books
     public function books(): HasMany

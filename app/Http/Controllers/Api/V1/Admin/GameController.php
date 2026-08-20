@@ -2,62 +2,125 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Http\Controllers\Concerns\HasOffsetLimit;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\StoreGameRequest;
 use App\Http\Requests\Api\Admin\UpdateGameRequest;
 use App\Models\Game;
+use App\Models\GameBanner;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class GameController extends Controller
 {
-   // Create Game
-public function store(StoreGameRequest $request)
-{
-    // Create Game
-    $game = Game::create($request->validated());
+    use HasOffsetLimit;
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Game created successfully.',
-        'data' => $game,
-    ], 201);
-}
+    public function store(StoreGameRequest $request)
+    {
+        $data = $request->validated();
 
-// Game List
-public function index()
-{
-    $games = Game::latest()->paginate(10);
+        if ($request->hasFile('game_image')) {
+            $data['game_image'] = $request->file('game_image')->store('games', 'public');
+        }
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Game list fetched successfully.',
-        'data' => $games,
-    ], 200);
-}
+        $game = Game::create($data);
 
-// Game Details
-public function show(Game $game)
-{
-    return response()->json([
-        'success' => true,
-        'message' => 'Game details fetched successfully.',
-        'data' => $game,
-    ], 200);
-}
+        // Store banner images
+        if ($request->hasFile('banners')) {
+            foreach ($request->file('banners') as $i => $banner) {
+                GameBanner::create([
+                    'game_id'    => $game->id,
+                    'image_path' => $banner->store('games/banners', 'public'),
+                    'sort_order' => $i,
+                ]);
+            }
+        }
 
-// Update Game
-public function update(UpdateGameRequest $request, Game $game)
-{
-    // Update only validated fields
-    $game->update($request->validated());
+        return response()->json([
+            'success' => true,
+            'message' => 'Game created successfully.',
+            'data'    => $this->serializeGame($game->fresh(['banners'])),
+        ], 201);
+    }
 
-    // Refresh updated data
-    $game->refresh();
+    public function index(Request $request)
+    {
+        $games = $this->paginateWithOffset(
+            Game::with('banners')->latest(),
+            $request
+        );
 
-    // Return updated game
-    return response()->json([
-        'success' => true,
-        'message' => 'Game updated successfully.',
-        'data' => $game,
-    ], 200);
-}
+        return response()->json([
+            'success' => true,
+            'message' => 'Game list fetched successfully.',
+            'data'    => $games->through(fn($g) => $this->serializeGame($g)),
+        ]);
+    }
+
+    public function show(Game $game)
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Game details fetched successfully.',
+            'data'    => $this->serializeGame($game->load('banners')),
+        ]);
+    }
+
+    public function update(UpdateGameRequest $request, Game $game)
+    {
+        $data = $request->validated();
+
+        if ($request->hasFile('game_image')) {
+            if ($game->game_image) {
+                Storage::disk('public')->delete($game->game_image);
+            }
+            $data['game_image'] = $request->file('game_image')->store('games', 'public');
+        }
+
+        // Delete specific banners if requested
+        if (!empty($data['delete_banner_ids'])) {
+            $toDelete = GameBanner::whereIn('id', $data['delete_banner_ids'])
+                ->where('game_id', $game->id)
+                ->get();
+
+            foreach ($toDelete as $banner) {
+                Storage::disk('public')->delete($banner->image_path);
+                $banner->delete();
+            }
+        }
+
+        // Add new banners
+        if ($request->hasFile('banners')) {
+            $nextOrder = $game->banners()->max('sort_order') + 1;
+            foreach ($request->file('banners') as $i => $banner) {
+                GameBanner::create([
+                    'game_id'    => $game->id,
+                    'image_path' => $banner->store('games/banners', 'public'),
+                    'sort_order' => $nextOrder + $i,
+                ]);
+            }
+        }
+
+        unset($data['delete_banner_ids'], $data['banners']);
+        $game->update($data);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Game updated successfully.',
+            'data'    => $this->serializeGame($game->fresh(['banners'])),
+        ]);
+    }
+
+    private function serializeGame(Game $game): array
+    {
+        return array_merge($game->toArray(), [
+            'banners' => $game->relationLoaded('banners')
+                ? $game->banners->map(fn($b) => [
+                    'id'        => $b->id,
+                    'image_url' => $b->image_url,
+                    'sort_order'=> $b->sort_order,
+                ])->values()
+                : [],
+        ]);
+    }
 }

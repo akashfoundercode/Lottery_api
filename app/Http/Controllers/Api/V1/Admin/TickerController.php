@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Http\Controllers\Concerns\HasOffsetLimit;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\StoreTickerRequest;
 use App\Http\Requests\Api\Admin\UpdateTickerRequest;
@@ -9,11 +10,13 @@ use App\Models\Ticker;
 
 class TickerController extends Controller
 {
-    public function index()
+    use HasOffsetLimit;
+
+    public function index(\Illuminate\Http\Request $request)
     {
-        $tickers = Ticker::orderBy('sort_order')
+        $tickers = $this->paginateWithOffset(Ticker::orderBy('sort_order')
             ->latest()
-            ->paginate(10);
+            , $request);
 
         return response()->json([
             'success' => true,
