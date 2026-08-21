@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class BookAssignment extends Model
 {
@@ -20,20 +19,19 @@ class BookAssignment extends Model
         'expiry_at' => 'datetime',
     ];
 
-    // Assignment belongs to Book
+    /**
+     * Assignment belongs to Book
+     */
     public function book(): BelongsTo
     {
         return $this->belongsTo(Book::class);
     }
 
-    // Assignment belongs to Agent
+    /**
+     * Assignment belongs to Agent
+     */
     public function agent(): BelongsTo
     {
         return $this->belongsTo(Agent::class);
-    }
-
-    public function assignments(): HasMany
-    {
-        return $this->hasMany(BookAssignment::class);
     }
 }

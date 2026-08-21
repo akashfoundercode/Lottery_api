@@ -7,6 +7,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\StoreGameRequest;
 use App\Http\Requests\Api\Admin\UpdateGameRequest;
 use App\Models\Game;
+use App\Models\Book;
+use App\Models\BookAssignment;
+use App\Models\Agent;
 use App\Models\GameBanner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -21,6 +24,10 @@ class GameController extends Controller
 
         if ($request->hasFile('game_image')) {
             $data['game_image'] = $request->file('game_image')->store('games', 'public');
+        }
+
+        if (empty($data['game_id'])) {
+            $data['game_id'] = $this->generateGameCode();
         }
 
         $game = Game::create($data);
@@ -102,6 +109,17 @@ class GameController extends Controller
         }
 
         unset($data['delete_banner_ids'], $data['banners']);
+
+        // Jab game pehli baar active ho tab went_live_at set karo
+        if (
+            isset($data['status']) &&
+            $data['status'] === \App\Enums\GameStatus::ACTIVE->value &&
+            $game->status !== \App\Enums\GameStatus::ACTIVE &&
+            is_null($game->went_live_at)
+        ) {
+            $data['went_live_at'] = now();
+        }
+
         $game->update($data);
 
         return response()->json([
@@ -122,5 +140,14 @@ class GameController extends Controller
                 ])->values()
                 : [],
         ]);
+    }
+
+    private function generateGameCode(): string
+    {
+        do {
+            $code = strtoupper(substr(str_shuffle('ABCDEFGHJKLMNPQRSTUVWXYZ23456789'), 0, 6));
+        } while (Game::where('game_id', $code)->exists());
+
+        return $code;
     }
 }

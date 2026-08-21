@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\StoreAgentRequest;
 use App\Http\Requests\Api\Admin\UpdateAgentRequest;
 use App\Models\Agent;
+use Illuminate\Support\Facades\Storage;
 
 class AgentController extends Controller
 {
@@ -20,7 +21,7 @@ class AgentController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Agent created successfully.',
-            'data' => $agent,
+            'data' => $this->serializeAgent($agent),
         ], 201);
     }
 
@@ -28,6 +29,9 @@ class AgentController extends Controller
     public function index(\Illuminate\Http\Request $request)
     {
         $agents = $this->paginateWithOffset(Agent::latest(), $request);
+        $agents->getCollection()->transform(
+            fn (Agent $agent) => $this->serializeAgent($agent)
+        );
 
         return response()->json([
             'success' => true,
@@ -42,7 +46,7 @@ class AgentController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Agent details fetched successfully.',
-            'data' => $agent,
+            'data' => $this->serializeAgent($agent),
         ], 200);
     }
 
@@ -56,6 +60,16 @@ class AgentController extends Controller
             unset($data['password']);
         }
 
+        if ($request->hasFile('profile_photo')) {
+            if ($agent->profile_photo) {
+                Storage::disk('public')->delete($agent->profile_photo);
+            }
+
+            $data['profile_photo'] = $request
+                ->file('profile_photo')
+                ->store('agents/photos', 'public');
+        }
+
         $agent->update($data);
 
         $agent->refresh();
@@ -63,7 +77,7 @@ class AgentController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Agent updated successfully.',
-            'data' => $agent,
+            'data' => $this->serializeAgent($agent),
         ], 200);
     }
 
@@ -87,5 +101,16 @@ class AgentController extends Controller
                 'status' => $agent->status,
             ],
         ], 200);
+    }
+
+    private function serializeAgent(Agent $agent): array
+    {
+        $data = $agent->toArray();
+
+        $data['profile_photo_path'] = $agent->getRawOriginal('profile_photo');
+        $data['profile_photo'] = $agent->profile_photo_url;
+        $data['profile_photo_url'] = $agent->profile_photo_url;
+
+        return $data;
     }
 }

@@ -22,6 +22,7 @@ class Game extends Model
         'youtube_live_url',
         'facebook_live_url',
         'status',
+        'went_live_at',
     ];
 
     protected $appends = ['game_image_url'];
@@ -40,11 +41,13 @@ class Game extends Model
     {
         return $this->hasMany(GameBanner::class)->orderBy('sort_order');
     }
+    
 
     // Attribute Casting
     protected $casts = [
-        'ticket_price' => 'decimal:2',
-        'draw_date'    => 'date',
-        'status'       => GameStatus::class,
+        'ticket_price'  => 'decimal:2',
+        'draw_date'     => 'date',
+        'status'        => GameStatus::class,
+        'went_live_at'  => 'datetime',
     ];
 }

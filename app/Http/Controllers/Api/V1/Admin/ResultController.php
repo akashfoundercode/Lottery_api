@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ResultController extends Controller
 {
@@ -95,12 +96,7 @@ class ResultController extends Controller
             $result->update($resultData);
 
             if (isset($data['prizes'])) {
-                // Delete old prize images then records
-                foreach ($result->prizes as $prize) {
-                    $this->deleteFile($prize->prize_image);
-                }
-                $result->prizes()->delete();
-                $this->syncPrizes($result, $data['prizes'], $request);
+                $this->updatePrizes($result, $data['prizes'], $request);
             }
 
             DB::commit();
@@ -155,6 +151,59 @@ class ResultController extends Controller
 
     // ─── Private Helpers ────────────────────────────────────────────────────────
 
+    private function updatePrizes(Result $result, array $prizes, Request $request): void
+    {
+        $game = $result->game ?? $result->load('game')->game;
+
+        $totalBooksSold = $game->total_books ?? 0;
+        $bookSize       = $game->book_size ?? 10;
+        $totalTickets   = $totalBooksSold * $bookSize;
+        $bookPrice      = (float) ($game->ticket_price ?? 0) * $bookSize;
+        $ticketPrice    = (float) ($game->ticket_price ?? 0);
+
+        // Index existing prizes by prize_type+rank for O(1) lookup
+        $existing = $result->prizes->keyBy(fn($p) => $p->prize_type . '_' . $p->rank);
+
+        foreach ($prizes as $index => $prizeData) {
+            $key          = $prizeData['prize_type'] . '_' . $prizeData['rank'];
+            $existingPrize = $existing->get($key);
+            $fileKey      = "prizes.{$index}.prize_image";
+
+            $updateData = [
+                'prize_name'           => $prizeData['prize_name'] ?? null,
+                'prize_amount'         => $prizeData['prize_amount'],
+                'winner_name'          => $prizeData['winner_name'] ?? null,
+                'winner_ticket_number' => $prizeData['winner_ticket_number'] ?? null,
+                'winner_book_number'   => $prizeData['winner_book_number'] ?? null,
+                'total_books_sold'     => $totalBooksSold,
+                'total_tickets'        => $totalTickets,
+                'book_price'           => $bookPrice,
+                'ticket_price'         => $ticketPrice,
+            ];
+
+            if ($request->hasFile($fileKey)) {
+                // New image uploaded — delete old, store new
+                if ($existingPrize?->prize_image) {
+                    $this->deleteFile($existingPrize->prize_image);
+                }
+                $updateData['prize_image'] = $request->file($fileKey)->store('results/prizes', 'public');
+            }
+            // No file sent → prize_image NOT included in updateData → existing image preserved
+
+            if ($existingPrize) {
+                $existingPrize->update($updateData);
+            } else {
+                // New prize entry (rank/type didn't exist before)
+                ResultPrize::create(array_merge($updateData, [
+                    'result_id'  => $result->id,
+                    'rank'       => $prizeData['rank'],
+                    'prize_type' => $prizeData['prize_type'],
+                    'prize_image' => $updateData['prize_image'] ?? null,
+                ]));
+            }
+        }
+    }
+
     private function syncPrizes(Result $result, array $prizes, Request $request): void
     {
         $game = $result->game ?? $result->load('game')->game;
@@ -208,9 +257,7 @@ class ResultController extends Controller
             'result_date'  => $result->result_date?->format('Y-m-d'),
             'description'  => $result->description,
             'status'       => $result->status,
-            'result_image' => $result->result_image
-                ? Storage::disk('public')->url($result->result_image)
-                : null,
+            'result_image' => $this->publicStorageUrl($result->result_image),
             'game' => $result->relationLoaded('game') && $result->game ? [
                 'id'        => $result->game->id,
                 'game_id'   => $result->game->game_id,
@@ -222,23 +269,30 @@ class ResultController extends Controller
             'prizes' => $result->relationLoaded('prizes')
                 ? $result->prizes->map(fn($p) => [
                     'id'               => $p->id,
+                    'game_id'          => $result->game_id,
                     'rank'             => $p->rank,
                     'prize_name'       => $p->prize_name,
                     'prize_type'       => $p->prize_type,
                     'prize_amount'     => $p->prize_amount,
                     'prize_image_url'  => $p->prize_image_url,
-                    'winner_name'      => $p->winner_name,
-                    'winner_ticket_number' => $p->winner_ticket_number,
-                    'winner_book_number'   => $p->winner_book_number,
-                    'total_books_sold' => $p->total_books_sold,
-                    'total_tickets'    => $p->total_tickets,
-                    'book_price'       => $p->book_price,
-                    'ticket_price'     => $p->ticket_price,
                 ])->values()
                 : [],
             'created_at' => $result->created_at?->toISOString(),
             'updated_at' => $result->updated_at?->toISOString(),
             'deleted_at' => $result->deleted_at?->toISOString(),
         ];
+    }
+
+    private function publicStorageUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+
+        return request()->getSchemeAndHttpHost() . '/storage/' . ltrim($path, '/');
     }
 }

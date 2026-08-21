@@ -233,6 +233,80 @@ class BookController extends Controller
         ], 200);
     }
 
+    /**
+     * Admin: Game live hone ke 1 ghante baad jo books ASSIGNED hain
+     * (agent ne kuch nahi kiya) unhe unsold_by_admin mark karo.
+     * POST /admin/books/mark-unsold-by-admin
+     * Body: { game_id: <id> }
+     */
+    public function markUnsoldByAdmin(Request $request)
+    {
+        $request->validate([
+            'game_id' => 'required|integer|exists:games,id',
+        ]);
+
+        $game = \App\Models\Game::findOrFail($request->game_id);
+
+        if (! $game->went_live_at) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This game has not gone live yet.',
+            ], 422);
+        }
+
+        if (now()->diffInMinutes($game->went_live_at) < 60) {
+            $remaining = 60 - now()->diffInMinutes($game->went_live_at);
+            return response()->json([
+                'success' => false,
+                'message' => "1-hour window is still active. {$remaining} minute(s) remaining.",
+            ], 422);
+        }
+
+        // Sirf ASSIGNED books (agent ne kuch nahi kiya)
+        $books = Book::with('agent')
+            ->where('game_id', $game->id)
+            ->where('status', BookStatus::ASSIGNED)
+            ->get();
+
+        if ($books->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'No assigned books found to mark as unsold by admin.',
+                'updated_count' => 0,
+            ]);
+        }
+
+        DB::transaction(function () use ($books) {
+            foreach ($books as $book) {
+                $book->update([
+                    'status'    => BookStatus::UNSOLD_BY_ADMIN,
+                    'unsold_at' => now(),
+                ]);
+                BookStatusHistory::create([
+                    'book_id'    => $book->id,
+                    'agent_id'   => $book->agent_id,
+                    'old_status' => BookStatus::ASSIGNED->value,
+                    'new_status' => BookStatus::UNSOLD_BY_ADMIN->value,
+                    'changed_at' => now(),
+                ]);
+            }
+        });
+
+        return response()->json([
+            'success'       => true,
+            'message'       => 'Books marked as unsold by admin successfully.',
+            'updated_count' => $books->count(),
+            'data'          => $books->fresh()->map(fn($b) => [
+                'book_id'    => $b->id,
+                'book_number'=> $b->book_id,
+                'agent_id'   => $b->agent_id,
+                'agent_name' => $b->agent?->agent_name,
+                'status'     => $b->status,
+                'unsold_at'  => $b->unsold_at,
+            ]),
+        ]);
+    }
+
     private function nextBookId(): string
     {
         $nextNumber = Book::lockForUpdate()->count() + 1;

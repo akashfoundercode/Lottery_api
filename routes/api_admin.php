@@ -29,14 +29,17 @@ Route::prefix('v1/admin')->group(function () {
         Route::delete('/tickers/{ticker}', [TickerController::class, 'destroy']);
         Route::patch('/tickers/{ticker}/toggle-status', [TickerController::class, 'toggleStatus']);
 
-        Route::get('/results', [ResultController::class, 'index']);
+        
+    });
+    Route::get('/results', [ResultController::class, 'index']);
         Route::post('/results', [ResultController::class, 'store']);
         Route::get('/results/{result}', [ResultController::class, 'show']);
         Route::put('/results/{result}', [ResultController::class, 'update']);
         Route::delete('/results/{result}', [ResultController::class, 'destroy']);
         Route::patch('/results/{result}/restore', [ResultController::class, 'restore']);
         Route::patch('/results/{result}/toggle-status', [ResultController::class, 'toggleStatus']);
-    });
+
+        
     Route::post('/books/import', [BookController::class, 'import'])->middleware('auth:admin');
     Route::post('/logout', [AuthController::class, 'logout']);
     // Change Password
@@ -57,6 +60,8 @@ Route::prefix('v1/admin')->group(function () {
     Route::get('/books/{book}', [BookController::class, 'show']);
     // Admin: Update Book Status (sold/unsold correction)
     Route::patch('/books/update-status', [BookController::class, 'updateStatus']);
+    // Admin: 1 ghante baad assigned books ko unsold_by_admin mark karo
+    Route::post('/books/mark-unsold-by-admin', [BookController::class, 'markUnsoldByAdmin']);
     // Create Agent
     Route::post('/agents', [AgentController::class, 'store']);
     // Agent List

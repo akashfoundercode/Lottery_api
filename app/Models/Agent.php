@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 class Agent extends Authenticatable
@@ -35,7 +36,15 @@ class Agent extends Authenticatable
 
     public function getProfilePhotoUrlAttribute(): ?string
     {
-        return $this->profile_photo ? asset('storage/' . $this->profile_photo) : null;
+        if (! $this->profile_photo) {
+            return null;
+        }
+
+        if (Str::startsWith($this->profile_photo, ['http://', 'https://'])) {
+            return $this->profile_photo;
+        }
+
+        return asset('storage/' . ltrim($this->profile_photo, '/'));
     }
 
     // Agent ke assigned books

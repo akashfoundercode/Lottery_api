@@ -14,11 +14,11 @@ class AgentProfileController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Profile fetched successfully.',
-            'data'    => $request->user(),
+            'data'    => $this->serializeAgent($request->user()),
         ]);
     }
 
-    // Profile update (name, mobile, whatsapp, address)
+    // Profile update (name, mobile, whatsapp, address, photo)
     public function update(Request $request)
     {
         $agent = $request->user();
@@ -28,14 +28,25 @@ class AgentProfileController extends Controller
             'mobile_number'   => 'sometimes|required|string|max:20',
             'whatsapp_number' => 'sometimes|nullable|string|max:20',
             'address'         => 'sometimes|nullable|string',
+            'profile_photo'   => 'sometimes|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
+
+        if ($request->hasFile('profile_photo')) {
+            if ($agent->profile_photo) {
+                Storage::disk('public')->delete($agent->profile_photo);
+            }
+
+            $data['profile_photo'] = $request
+                ->file('profile_photo')
+                ->store('agents/photos', 'public');
+        }
 
         $agent->update($data);
 
         return response()->json([
             'success' => true,
             'message' => 'Profile updated successfully.',
-            'data'    => $agent->fresh(),
+            'data'    => $this->serializeAgent($agent->fresh()),
         ]);
     }
 
@@ -43,7 +54,7 @@ class AgentProfileController extends Controller
     public function updatePhoto(Request $request)
     {
         $request->validate([
-            'profile_photo' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'profile_photo' => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $agent = $request->user();
@@ -58,7 +69,18 @@ class AgentProfileController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Profile photo updated successfully.',
-            'data'    => $agent->fresh(),
+            'data'    => $this->serializeAgent($agent->fresh()),
         ]);
+    }
+
+    private function serializeAgent($agent): array
+    {
+        $data = $agent->toArray();
+
+        $data['profile_photo_path'] = $agent->getRawOriginal('profile_photo');
+        $data['profile_photo'] = $agent->profile_photo_url;
+        $data['profile_photo_url'] = $agent->profile_photo_url;
+
+        return $data;
     }
 }

@@ -8,15 +8,15 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('results', function (Blueprint $table) {
-            $table->text('description')->nullable()->after('result_date');
+        Schema::table('games', function (Blueprint $table) {
+            $table->timestamp('went_live_at')->nullable()->after('status');
         });
     }
 
     public function down(): void
     {
-        Schema::table('results', function (Blueprint $table) {
-            $table->dropColumn('description');
+        Schema::table('games', function (Blueprint $table) {
+            $table->dropColumn('went_live_at');
         });
     }
 };

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+
 class Book extends Model
 {
     // Mass Assignable Fields
@@ -55,5 +56,11 @@ class Book extends Model
     public function statusHistories()
     {
         return $this->hasMany(BookStatusHistory::class);
+    }
+    
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(BookAssignment::class);
     }
 }

@@ -86,6 +86,13 @@ class UpdateAgentRequest extends FormRequest
                     'inactive',
                 ]),
             ],
+
+            'profile_photo' => [
+                'sometimes',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
+            ],
         ];
     }
 }

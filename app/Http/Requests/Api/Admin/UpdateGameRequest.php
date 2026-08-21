@@ -20,6 +20,22 @@ class UpdateGameRequest extends FormRequest
         if ($this->input('_method')) {
             $this->offsetUnset('_method');
         }
+
+        $data = [];
+
+        if ($this->has('game_id')) {
+            $data['game_id'] = strtoupper((string) $this->input('game_id'));
+        }
+
+        if ($this->has('status')) {
+            $data['status'] = match (strtolower((string) $this->input('status'))) {
+                'live' => GameStatus::ACTIVE->value,
+                'upcoming' => GameStatus::INACTIVE->value,
+                default => strtolower((string) $this->input('status')),
+            };
+        }
+
+        $this->merge($data);
     }
 
     // Validation Rules

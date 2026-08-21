@@ -13,12 +13,31 @@ class StoreGameRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $data = [];
+
+        if ($this->has('game_id')) {
+            $data['game_id'] = strtoupper((string) $this->input('game_id'));
+        }
+
+        if ($this->has('status')) {
+            $data['status'] = match (strtolower((string) $this->input('status'))) {
+                'live' => GameStatus::ACTIVE->value,
+                'upcoming' => GameStatus::INACTIVE->value,
+                default => strtolower((string) $this->input('status')),
+            };
+        }
+
+        $this->merge($data);
+    }
+
     // Validation Rules
     public function rules(): array
 {
     return [
         'game_name'         => 'required|string|max:100',
-        'game_id'           => 'required|string|max:50|unique:games,game_id',
+        'game_id'           => 'nullable|string|max:50|unique:games,game_id',
         'game_image'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         'ticket_price'      => 'required|numeric|min:1',
         'book_size'         => 'required|integer|min:1',

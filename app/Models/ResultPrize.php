@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ResultPrize extends Model
 {
@@ -15,13 +15,7 @@ class ResultPrize extends Model
         'prize_type',
         'prize_amount',
         'prize_image',
-        'winner_name',
-        'winner_ticket_number',
-        'winner_book_number',
-        'total_books_sold',
-        'total_tickets',
-        'book_price',
-        'ticket_price',
+     
     ];
 
     protected $casts = [
@@ -34,7 +28,15 @@ class ResultPrize extends Model
 
     public function getPrizeImageUrlAttribute(): ?string
     {
-        return $this->prize_image ? Storage::disk('public')->url($this->prize_image) : null;
+        if (! $this->prize_image) {
+            return null;
+        }
+
+        if (Str::startsWith($this->prize_image, ['http://', 'https://'])) {
+            return $this->prize_image;
+        }
+
+        return request()->getSchemeAndHttpHost() . '/storage/' . ltrim($this->prize_image, '/');
     }
 
     public function result(): BelongsTo
