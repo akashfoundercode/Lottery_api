@@ -26,6 +26,7 @@ class MarkExpiredBooksUnsoldByAdmin implements ShouldQueue
         foreach ($games as $game) {
             $books = Book::where('game_id', $game->id)
                 ->where('status', BookStatus::ASSIGNED)
+                ->whereNull('admin_unlocked_at')
                 ->get();
 
             if ($books->isEmpty()) {

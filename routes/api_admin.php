@@ -5,6 +5,9 @@ use App\Http\Controllers\Api\V1\Admin\AuthController;
 use App\Http\Controllers\Api\V1\Admin\BookAssignmentController;
 use App\Http\Controllers\Api\V1\Admin\BookController;
 use App\Http\Controllers\Api\V1\Admin\GameController;
+use App\Http\Controllers\Api\V1\Admin\GameBannerController;
+use App\Http\Controllers\Api\V1\Admin\GameLiveLinkController;
+use App\Http\Controllers\Api\V1\Admin\ContactSettingController;
 use App\Http\Controllers\Api\V1\Admin\ResultController;
 use App\Http\Controllers\Api\V1\Admin\TickerController;
 use Illuminate\Http\Request;
@@ -31,6 +34,7 @@ Route::prefix('v1/admin')->group(function () {
 
         
     });
+    Route::get('/latest-result', [ResultController::class, 'latest']);
     Route::get('/results', [ResultController::class, 'index']);
         Route::post('/results', [ResultController::class, 'store']);
         Route::get('/results/{result}', [ResultController::class, 'show']);
@@ -60,6 +64,7 @@ Route::prefix('v1/admin')->group(function () {
     Route::get('/books/{book}', [BookController::class, 'show']);
     // Admin: Update Book Status (sold/unsold correction)
     Route::patch('/books/update-status', [BookController::class, 'updateStatus']);
+    Route::patch('/books/unlock-by-admin', [BookController::class, 'unlockByAdmin']);
     // Admin: 1 ghante baad assigned books ko unsold_by_admin mark karo
     Route::post('/books/mark-unsold-by-admin', [BookController::class, 'markUnsoldByAdmin']);
     // Create Agent
@@ -72,6 +77,19 @@ Route::prefix('v1/admin')->group(function () {
     Route::put('/agents/{agent}', [AgentController::class, 'update']);
     // Toggle Agent Status
     Route::patch('/agents/{agent}/toggle-status', [AgentController::class, 'toggleStatus']);
+    Route::get('/contact-settings', [ContactSettingController::class, 'show']);
+    Route::post('/contact-settings', [ContactSettingController::class, 'store']);
+    Route::put('/contact-settings', [ContactSettingController::class, 'update']);
+    Route::get('/live-banners', [GameBannerController::class, 'all']);
+    Route::get('/games/{game}/live-banners', [GameBannerController::class, 'index']);
+    Route::post('/games/{game}/live-banners', [GameBannerController::class, 'store']);
+    Route::post('/games/{game}/live-banners/update', [GameBannerController::class, 'update']);
+    Route::put('/games/{game}/live-banners', [GameBannerController::class, 'update']);
+    Route::delete('/games/{game}/live-banners/{banner}', [GameBannerController::class, 'destroy']);
+    Route::get('/games/{game}/live-links', [GameLiveLinkController::class, 'index']);
+    Route::post('/games/{game}/live-links', [GameLiveLinkController::class, 'store']);
+    Route::put('/games/{game}/live-links', [GameLiveLinkController::class, 'update']);
+    Route::delete('/games/{game}/live-links/{link}', [GameLiveLinkController::class, 'destroy']);
     // Book Assignment
     Route::post('/book-assignments', [BookAssignmentController::class, 'store']);
     Route::get('/book-assignments/history', [BookAssignmentController::class, 'history']);

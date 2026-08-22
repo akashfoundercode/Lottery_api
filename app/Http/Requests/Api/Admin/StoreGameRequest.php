@@ -48,7 +48,7 @@ class StoreGameRequest extends FormRequest
         'facebook_live_url' => 'nullable|url|max:255',
         'status'            => 'required|in:' . implode(',', array_column(GameStatus::cases(), 'value')),
         'banners'           => 'nullable|array',
-        'banners.*'         => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+    'banners.*'         => 'image|mimes:jpg,jpeg,png,webp|max:20480',
     ];
 }
 }

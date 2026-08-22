@@ -23,6 +23,7 @@ class Book extends Model
         'expiry_at',
         'sold_at',
         'unsold_at',
+        'admin_unlocked_at',
     ];
 
     // Attribute Casting
@@ -32,6 +33,7 @@ class Book extends Model
         'expiry_at' => 'datetime',
         'sold_at' => 'datetime',
         'unsold_at' => 'datetime',
+        'admin_unlocked_at' => 'datetime',
         'status' => BookStatus::class,
     ];
 

@@ -352,15 +352,23 @@ class UserSearchController extends Controller
      */
     public function results(Request $request): JsonResponse
     {
+        $request->validate([
+            'game_id' => 'nullable|integer|exists:games,id',
+        ]);
+
         [
             $items,
             $pagination,
         ] = $this->offsetItems(
             Result::with([
-                'game',
+                'game.books.agent',
+                'game.books.tickets',
                 'prizes',
             ])
                 ->where('status', 'active')
+                ->when($request->filled('game_id'), fn ($query) =>
+                    $query->where('game_id', $request->integer('game_id'))
+                )
                 ->orderByDesc('result_date'),
             $request
         );
@@ -380,14 +388,22 @@ class UserSearchController extends Controller
      */
     public function resultsHistory(Request $request): JsonResponse
     {
+        $request->validate([
+            'game_id' => 'nullable|integer|exists:games,id',
+        ]);
+
         [
             $items,
             $pagination,
         ] = $this->offsetItems(
             Result::with([
-                'game',
+                'game.books.agent',
+                'game.books.tickets',
                 'prizes',
             ])
+                ->when($request->filled('game_id'), fn ($query) =>
+                    $query->where('game_id', $request->integer('game_id'))
+                )
                 ->orderByDesc('result_date'),
             $request
         );
@@ -413,7 +429,8 @@ class UserSearchController extends Controller
             'data' => [
                 'result' => $this->serializeResult(
                     $result->load([
-                        'game',
+                        'game.books.agent',
+                        'game.books.tickets',
                         'prizes',
                     ])
                 ),
@@ -558,6 +575,10 @@ class UserSearchController extends Controller
 
             'game_name' => $game->game_name,
 
+            'game_image' => $game->game_image_url,
+
+            'game_image_url' => $game->game_image_url,
+
             'ticket_price' => $game->ticket_price,
 
             'draw_date' => $this->formatDate(
@@ -679,6 +700,54 @@ class UserSearchController extends Controller
             'result_image' => $this->publicStorageUrl(
                 $result->result_image
             ),
+
+            'game' => $result->game
+                ? [
+                    'id' => $result->game->id,
+                    'game_id' => $result->game->game_id,
+                    'game_name' => $result->game->game_name,
+                    'game_image' => $result->game->game_image_url,
+                    'ticket_price' => $result->game->ticket_price,
+                    'book_size' => $result->game->book_size,
+                    'total_books' => $result->game->total_books,
+                    'draw_date' => $this->formatDate($result->game->draw_date, 'Y-m-d'),
+                    'draw_time' => $this->formatDate($result->game->draw_time, 'H:i:s'),
+                    'status' => $this->normalizeStatus($result->game->status),
+                    'books' => $result->game->relationLoaded('books')
+                        ? $result->game->books->map(fn ($book) => [
+                            'id' => $book->id,
+                            'book_id' => $book->book_id,
+                            'status' => $this->normalizeStatus($book->status),
+                            'assigned_at' => $book->assigned_at,
+                            'agent' => $book->agent
+                                ? [
+                                    'id' => $book->agent->id,
+                                    'agent_id' => $book->agent->agent_id,
+                                    'agent_name' => $book->agent->agent_name,
+                                    'profile_photo' => $book->agent->profile_photo_url,
+                                ]
+                                : null,
+                            'tickets' => $book->tickets->map(fn ($ticket) => [
+                                'id' => $ticket->id,
+                                'ticket_number' => $ticket->ticket_number,
+                            ])->values(),
+                        ])->values()
+                        : [],
+                    'assigned_agents' => $result->game->relationLoaded('books')
+                        ? $result->game->books
+                            ->filter(fn ($book) => $book->agent)
+                            ->map(fn ($book) => $book->agent)
+                            ->unique('id')
+                            ->values()
+                            ->map(fn ($agent) => [
+                                'id' => $agent->id,
+                                'agent_id' => $agent->agent_id,
+                                'agent_name' => $agent->agent_name,
+                                'profile_photo' => $agent->profile_photo_url,
+                            ])
+                        : [],
+                ]
+                : null,
 
             'prizes' => $result->relationLoaded(
                 'prizes'

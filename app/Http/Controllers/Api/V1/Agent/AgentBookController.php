@@ -97,17 +97,16 @@ class AgentBookController extends Controller
             return response()->json(['success' => false, 'message' => 'This book is not assigned to you.'], 403);
         }
 
-        if (! in_array($book->status, [BookStatus::ASSIGNED, BookStatus::UNSOLD])) {
-            return response()->json(['success' => false, 'message' => 'This book cannot be marked as sold.'], 422);
-        }
-
         // Lock check: agar game live hue 1 ghanta guzar gaya ya book unsold_by_admin hai
         if ($book->status === BookStatus::UNSOLD_BY_ADMIN) {
             return response()->json(['success' => false, 'message' => 'This book has been locked by admin and cannot be changed.'], 403);
         }
 
         $game = $book->game;
-        if ($game && $game->went_live_at && now()->diffInMinutes($game->went_live_at) > 60) {
+        if (! in_array($book->status, [BookStatus::ASSIGNED, BookStatus::UNSOLD])) {
+            return response()->json(['success' => false, 'message' => 'This book cannot be marked as sold.'], 422);
+        }
+        if ($game && $game->went_live_at && now()->diffInMinutes($game->went_live_at) >= 60 && ! $book->admin_unlocked_at) {
             return response()->json(['success' => false, 'message' => 'The 1-hour window after game went live has expired. Book status is locked.'], 403);
         }
 
@@ -169,17 +168,16 @@ class AgentBookController extends Controller
             return response()->json(['success' => false, 'message' => 'This book is not assigned to you.'], 403);
         }
 
-        if (! in_array($book->status, [BookStatus::ASSIGNED, BookStatus::SOLD])) {
-            return response()->json(['success' => false, 'message' => 'This book cannot be marked as unsold.'], 422);
-        }
-
         // Lock check: agar game live hue 1 ghanta guzar gaya ya book unsold_by_admin hai
         if ($book->status === BookStatus::UNSOLD_BY_ADMIN) {
             return response()->json(['success' => false, 'message' => 'This book has been locked by admin and cannot be changed.'], 403);
         }
 
         $game = $book->game;
-        if ($game && $game->went_live_at && now()->diffInMinutes($game->went_live_at) > 60) {
+        if (! in_array($book->status, [BookStatus::ASSIGNED, BookStatus::SOLD])) {
+            return response()->json(['success' => false, 'message' => 'This book cannot be marked as unsold.'], 422);
+        }
+        if ($game && $game->went_live_at && now()->diffInMinutes($game->went_live_at) >= 60 && ! $book->admin_unlocked_at) {
             return response()->json(['success' => false, 'message' => 'The 1-hour window after game went live has expired. Book status is locked.'], 403);
         }
 

@@ -147,7 +147,20 @@ class BookController extends Controller
         $page   = max(1, (int) $request->query('page', 1));
         $offset = ($page - 1) * $limit;
 
-        $query = Book::with('game')->latest();
+        $query = Book::with(['game', 'agent'])
+            ->when($request->filled('status'), function ($query) use ($request) {
+                $status = $request->query('status');
+
+                if ($status === BookStatus::UNSOLD->value) {
+                    return $query->whereIn('status', [
+                        BookStatus::UNSOLD->value,
+                        BookStatus::UNSOLD_BY_ADMIN->value,
+                    ]);
+                }
+
+                return $query->where('status', $status);
+            })
+            ->latest();
         $total = (clone $query)->count();
         $books = $query->skip($offset)->take($limit)->get();
 
@@ -233,8 +246,55 @@ class BookController extends Controller
         ], 200);
     }
 
+    public function unlockByAdmin(Request $request)
+    {
+        $request->validate([
+            'book_id' => 'required|integer|exists:books,id',
+        ]);
+
+        $book = Book::with('agent')->findOrFail($request->book_id);
+
+        if ($book->status !== BookStatus::UNSOLD_BY_ADMIN) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only books marked unsold by admin can be unlocked.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($book) {
+            $book->update([
+                'status' => BookStatus::ASSIGNED,
+                'unsold_at' => null,
+                'admin_unlocked_at' => now(),
+            ]);
+
+            BookStatusHistory::create([
+                'book_id' => $book->id,
+                'agent_id' => $book->agent_id,
+                'old_status' => BookStatus::UNSOLD_BY_ADMIN->value,
+                'new_status' => BookStatus::ASSIGNED->value,
+                'changed_at' => now(),
+            ]);
+        });
+
+        $updated = $book->fresh()->load('agent');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Book unlocked successfully. Agent can mark it sold or unsold again.',
+            'data' => [
+                'book_id' => $updated->id,
+                'book_number' => $updated->book_id,
+                'agent_id' => $updated->agent_id,
+                'agent_name' => $updated->agent?->agent_name,
+                'status' => $updated->status,
+                'admin_unlocked_at' => $updated->admin_unlocked_at,
+            ],
+        ]);
+    }
+
     /**
-     * Admin: Game live hone ke 1 ghante baad jo books ASSIGNED hain
+    * Admin: Game live hone ke 1 ghante baad jo books ASSIGNED hain
      * (agent ne kuch nahi kiya) unhe unsold_by_admin mark karo.
      * POST /admin/books/mark-unsold-by-admin
      * Body: { game_id: <id> }
@@ -266,6 +326,7 @@ class BookController extends Controller
         $books = Book::with('agent')
             ->where('game_id', $game->id)
             ->where('status', BookStatus::ASSIGNED)
+            ->whereNull('admin_unlocked_at')
             ->get();
 
         if ($books->isEmpty()) {

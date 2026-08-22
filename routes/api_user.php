@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\V1\User\UserSearchController;
+use App\Http\Controllers\Api\V1\Admin\ContactSettingController;
+use App\Http\Controllers\Api\V1\Admin\GameBannerController;
+use App\Http\Controllers\Api\V1\Admin\GameLiveLinkController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/user')->group(function () {
@@ -14,5 +17,9 @@ Route::prefix('v1/user')->group(function () {
     Route::get('/results', [UserSearchController::class, 'results']);
     Route::get('/results/history', [UserSearchController::class, 'resultsHistory']);
     Route::get('/results/{result}', [UserSearchController::class, 'resultDetail']);
+    Route::get('/contact-details', [ContactSettingController::class, 'show']);
+    Route::get('/live-banners', [GameBannerController::class, 'all']);
+    Route::get('/games/{game}/live-banners', [GameBannerController::class, 'index']);
+    Route::get('/games/{game}/live-links', [GameLiveLinkController::class, 'index']);
     Route::post('/my-tickets', [UserSearchController::class, 'myTickets']);
 });

@@ -29,7 +29,17 @@ class Game extends Model
 
     public function getGameImageUrlAttribute(): ?string
     {
-        return $this->game_image ? asset('storage/' . $this->game_image) : null;
+        if (! $this->game_image) {
+            return null;
+        }
+
+        if (\Illuminate\Support\Str::startsWith($this->game_image, ['http://', 'https://'])) {
+            return $this->game_image;
+        }
+
+        return request()->getSchemeAndHttpHost()
+            . '/storage/'
+            . ltrim($this->game_image, '/');
     }
 
     public function books(): HasMany
@@ -40,6 +50,11 @@ class Game extends Model
     public function banners(): HasMany
     {
         return $this->hasMany(GameBanner::class)->orderBy('sort_order');
+    }
+
+    public function liveLinks(): HasMany
+    {
+        return $this->hasMany(GameLiveLink::class)->orderBy('sort_order');
     }
     
 

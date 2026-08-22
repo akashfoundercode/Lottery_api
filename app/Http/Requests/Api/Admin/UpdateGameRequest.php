@@ -123,7 +123,7 @@ class UpdateGameRequest extends FormRequest
             ],
 
             'banners' => ['sometimes', 'nullable', 'array'],
-            'banners.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'banners.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:20480'],
 
             // IDs of banners to delete
             'delete_banner_ids'   => ['sometimes', 'nullable', 'array'],

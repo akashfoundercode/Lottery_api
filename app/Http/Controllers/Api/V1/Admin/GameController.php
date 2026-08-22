@@ -22,6 +22,10 @@ class GameController extends Controller
     {
         $data = $request->validated();
 
+        if (($data['status'] ?? \App\Enums\GameStatus::ACTIVE->value) === \App\Enums\GameStatus::ACTIVE->value) {
+            $data['went_live_at'] = now();
+        }
+
         if ($request->hasFile('game_image')) {
             $data['game_image'] = $request->file('game_image')->store('games', 'public');
         }
@@ -132,6 +136,8 @@ class GameController extends Controller
     private function serializeGame(Game $game): array
     {
         return array_merge($game->toArray(), [
+            'game_image' => $game->game_image_url,
+            'game_image_url' => $game->game_image_url,
             'banners' => $game->relationLoaded('banners')
                 ? $game->banners->map(fn($b) => [
                     'id'        => $b->id,
